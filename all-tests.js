@@ -46,9 +46,46 @@ describe('User Route Tests', () => {
                 done();
             });
     });
+
+    // This makes sure that we are pulling from the correct MongoDB collection
+    it ('User exists and belongs to collection users', () => {
+        expect(User.model).to.exist;
+        expect(User.collection.name).to.equal('users');
+    });
+    
     
     it('User can register successfully at the /register route', (done) => {
-        done();
+        let newUser = {
+            name: 'Steve Jobs',
+            email: 'steve@gmail.com',
+            password: 'some password'
+        };
+
+        const expectedResponse = {
+            success: true,
+            msg: 'User registered!'
+        };
+
+        /**
+         * User.addUser() is an async functon, and Sinon does not automatically call the callback
+         * We need to call the callback and then let Mocha know that it has completed execution
+         */
+        sinon.stub(User, 'addUser').callsArg(1);
+
+        request
+            .post('/register')
+            .send(newUser)
+            .set('Accept', 'application/json')
+            .expect(200, (err, res) => {
+
+                // Make sure to restore the stub, otherwise other tests will break
+                User.addUser.restore();
+
+                // Since we are comparing two objects, we need the Chai Expect library's 
+                // deep.equal() method.
+                expect(res.body).to.deep.equal(expectedResponse);
+                done();
+            });
     })
 
     it('/register route fails', (done) => {
