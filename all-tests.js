@@ -8,6 +8,8 @@ const express = require('express');
 const User = require('./user-model');
 const routes = require('./user-routes');
 const bodyParser = require('body-parser');
+const jwt = require('jsonwebtoken');
+const config = require('./config');
 
 const supertest = require('supertest');
 
@@ -86,27 +88,159 @@ describe('User Route Tests', () => {
                 expect(res.body).to.deep.equal(expectedResponse);
                 done();
             });
-    })
+    });
 
     it('/register route fails', (done) => {
-        done();
-    })
+        let newUser = {
+            invalidProperty: 'Steve Jobs'
+        };
+
+        const expectedResponse = {
+            success: false,
+            msg: 'Failed to register'
+        };
+
+        // We need to call the addUser() method with an error because the user we are
+        // trying to add is invalid
+        sinon.stub(User, 'addUser').callsArgWith(1, new Error('Route threw error'));
+
+        request
+            .post('/register')
+            .send(newUser)
+            .set('Accept', 'application/json')
+            .expect(200, (err, res) => {
+
+                // Always remember to restore stubs!
+                User.addUser.restore();
+
+                expect(res.body).to.deep.equal(expectedResponse);
+                done();
+            });
+    });
 
     it('Can get user from /:id route', (done) => {
-        done();
-    })
+
+        const returnedUser = {
+            name: 'Steve Jobs',
+            email: 'steve@gmail.com',
+            password: 'some password'
+        };
+
+        const expectedResponse = {
+            success: true,
+            msg: returnedUser
+        };
+
+        sinon.stub(User, 'getUserById').callsArgWith(1, null, returnedUser);
+
+        request
+            .get('/some-id')
+            .set('Accept', 'application/json')
+            .expect(200, (err, res) => {
+                User.getUserById.restore();
+                expect(res.body).to.deep.equal(expectedResponse);
+                done();
+            });
+    });
 
     it('Cannot get user from /:id route -- User with id does not exist', (done) => {
-        done();
-    })
+
+        const expectedResponse = {
+            success: false,
+            msg: 'Failed to find user'
+        };
+
+        // When there is no user, our method passes two arguments -- null for the error 
+        // and null for the user 
+        sinon.stub(User, 'getUserById').callsArgWith(1, null, null);
+
+        request
+            .get('/some-id')
+            .set('Accept', 'application/json')
+            .expect(200, (err, res) => {
+                User.getUserById.restore();
+                expect(res.body).to.deep.equal(expectedResponse);
+                done();
+            });
+    });
 
     it('User is successfully authenticated', (done) => {
-        done();
-    })
+        const existingUser = {
+            _id: 'some-id',
+            name: 'Steve Jobs',
+            email: 'steve@gmail.com',
+            password: 'some password'
+        };
+
+        // Rather than stubbing the jwt.sign() method, we can just run it to determine result
+        const token = jwt.sign({data: existingUser}, config.secret, {
+            expiresIn: 2629746
+        });
+
+        const expectedResponse = {
+            success: true,
+            token: 'Bearer ' + token,
+            user: {
+                id: existingUser._id,
+                name: existingUser.name,
+                email: existingUser.email
+            }
+        };
+
+        // We ensure that the user is successfully found in the database and returned through callback
+        sinon.stub(User, 'getUserById').callsArgWith(1, null, existingUser);
+
+        // We force the comparePassword() method to return a match
+        sinon.stub(User, 'comparePassword').callsArgWith(2, null, true);
+
+        request
+            .post('/authenticate/some-id')
+            .send(existingUser)
+            .set('Accept', 'application/json')
+            .expect(200, (err, res) => {
+
+                // Always remember to restore stubs!
+                User.getUserById.restore();
+                User.comparePassword.restore();
+
+                expect(res.body).to.deep.equal(expectedResponse);
+                done();
+            });
+    });
 
     it('User typed in the wrong password', (done) => {
-        done();
-    })
+        const existingUser = {
+            _id: 'some-invalid-id',
+            name: 'Steve Jobs',
+            email: 'steve@gmail.com',
+            password: 'some password'
+        };
+
+        const expectedResponse = {
+            success: false,
+            msg: 'Wrong password'
+        };
+
+        // We ensure that the user is successfully found in the database and returned through callback
+        sinon.stub(User, 'getUserById').callsArgWith(1, null, existingUser);
+
+        // We force the comparePassword() method to return a mismatch (i.e. the user entered the wrong password)
+        sinon.stub(User, 'comparePassword').callsArgWith(2, null, false);
+
+        request
+            .post('/authenticate/some-invalid-id')
+            .send(existingUser)
+            .set('Accept', 'application/json')
+            .expect(200, (err, res) => {
+
+                // Always remember to restore stubs!
+                User.getUserById.restore();
+                User.comparePassword.restore();
+
+                expect(res.body).to.deep.equal(expectedResponse);
+                done();
+            });
+    });
 });
 
 describe('User Model Tests', () => {

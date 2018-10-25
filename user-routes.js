@@ -4,6 +4,8 @@
 // Require the Express Router object
 const router = require('express').Router();
 const User = require('./user-model');
+const config = require('./config');
+const jwt = require('jsonwebtoken');
 
 module.exports = (app) => {
     app.use('/', router);
@@ -36,7 +38,7 @@ module.exports = (app) => {
         User.getUserById(req.params.id, (err, user) => {
             if (err) next(err);
             if (!user){
-                return res.json({success: false, msg: "Failed to authenticate user"});
+                return res.json({success: false, msg: "Failed to find user"});
             } else {
                 return res.json({success: true, msg: user });
             }
@@ -61,7 +63,7 @@ module.exports = (app) => {
                 if(isMatch){
 
                     // Token expires in 1 month = 2,629,746 seconds
-                    const token = jwt.sign({data: user}, databaseConfig.secret, {
+                    const token = jwt.sign({data: user}, config.secret, {
                         expiresIn: 2629746
                     });
 
